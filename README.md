@@ -47,57 +47,6 @@ Resilience features: timeouts and error handling during feature extraction, path
 - Leakage-safe splits, fixed seeds, and documented preprocessing are critical to fair comparison
 - For production, combine a temporal model with feature-specific heads or loss weighting to address high-variance features
 
-## Repo structure
-- `src/`
-  - `data_gen.py`, `data_utils.py`, `features_librosa.py`
-  - `train_rf.py`, `train_gru.py`, `eval_metrics.py`, `plots.py`
-- `notebooks/`
-  - `01_eda.ipynb`, `02_baseline_rf.ipynb`, `03_gru_train_eval.ipynb`
-- `data/`
-  - `README.md` with pointers to sample data or generation scripts, keep large files out of Git
-- `configs/`
-  - `rf.yaml`, `gru_exp1.yaml`, `gru_exp2.yaml`, `gru_exp3.yaml`, `seeds.yaml`
-- `docs/`
-  - `mae_mse_plots`, `per_feature_mse_heatmap.png`, `loss_curves_exp1_3.png`, `dataset_schema.md`
-- `requirements.txt`
-- `.env.example`
-- `LICENSE`, `.gitignore`, `README.md`
-
-## Quickstart
-1.  **Environment**
-    -   Python 3.10+
-    -   Create and activate a venv
-
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # Windows: .venv\Scripts\activate
-    pip install -r requirements.txt
-    ```
-
-2.  **Data**
-    -   Place or generate sample audio and metadata
-    -   Option A: use provided small sample in `data/sample`, run feature extraction
-    -   Option B: point to your own audio and metadata CSV
-
-    ```bash
-    python src/features_librosa.py --csv data/metadata.csv --audio_root data/audio --out_root data/processed --sr 22050 --timeout_sec 120
-    ```
-
-3.  **Baseline, Random Forest**
-    ```bash
-    python src/train_rf.py --features data/processed/features_train.npy --labels data/processed/labels_train.csv --val_features data/processed/features_val.npy --val_labels data/processed/labels_val.csv --config configs/rf.yaml --out models/rf_baseline.joblib
-    ```
-
-4.  **GRU model**
-    ```bash
-    python src/train_gru.py --train_np data/processed/features_train.npy --train_labels data/processed/labels_train.csv --val_np data/processed/features_val.npy --val_labels data/processed/labels_val.csv --config configs/gru_exp3.yaml --out models/gru_exp3.pt
-    ```
-
-5.  **Evaluation and plots**
-    ```bash
-    python src/eval_metrics.py --test_np data/processed/features_test.npy --test_labels data/processed/labels_test.csv --model models/gru_exp3.pt --type gru --plots_out docs/
-    ```
-
 ## Results
 - Random Forest cross-validated MSE: 83.68
 - GRU RNN best Test MSE: **3.97**
@@ -106,14 +55,10 @@ Resilience features: timeouts and error handling during feature extraction, path
   - High error: tempo, loudness, key
 - Training dynamics: rapid convergence in 10–12 epochs, checkpointing stabilized progress on Colab A100
 
-See `docs/per_feature_mse_heatmap.png` and `docs/loss_curves_exp1_3.png`.
-
 ## Reproducibility
-- Fixed seeds in `configs/seeds.yaml`
 - Leakage-safe split by file, 70 percent train, 15 percent validation, 15 percent test
 - Versioned configs for each experiment
 - Checkpointing by best validation loss
-- Deterministic preprocessing with Librosa parameters recorded in `dataset_schema.md`
 
 ## Limitations
 - Tempo variance dominates global MSE and can obscure improvements on other targets
