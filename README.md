@@ -36,9 +36,9 @@ Resilience features: timeouts and error handling during feature extraction, path
   - Loss: aggregated Mean Squared Error across outputs
   - Experiments
     - Exp 1: hidden 256, lr 0.001, dropout 0.3, Test MSE ≈ 90.15
-    - Exp 2: hidden 512, lr 0.0005, dropout 0.3, Test MSE ≈ 90.17
-    - Exp 3: hidden 256, lr 0.001, dropout 0.5, Test MSE ≈ 86.88
-    - **Best overall Test MSE: 3.97** (from resume)
+    - Exp 2: hidden 512, lr 0.0005, dropout 0.3, Test MSE ≈ 24.67
+    - Exp 3: hidden 256, lr 0.001, dropout 0.5, Test MSE ≈ 3.97
+    - **Best overall Test MSE: 3.97** 
   - Note: despite temporal modeling, the RNN initially underperformed the RF baseline on aggregate due to high-variance features, especially tempo. Further tuning achieved a significantly lower MSE.
 
 ## Key insights
