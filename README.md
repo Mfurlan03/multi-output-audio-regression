@@ -1,28 +1,42 @@
 # Multi-Output Audio Feature Regression
-Predict 11 musical attributes from full-length audio using a baseline Random Forest and a GRU-based RNN. The pipeline covers data acquisition, Librosa-based preprocessing, leakage-safe splitting, model training, evaluation, and reporting.
 
-- Baseline, Random Forest, cross-validated MSE: 83.68
-- Primary, GRU RNN, best Test MSE: **3.97** after tuning
-- Notable finding: features with low variability, for example valence, liveness, energy, regress well, tempo remains high-variance and dominates aggregate MSE
+This project explores how well musical attributes can be predicted directly from full-length audio. I built an end-to-end pipeline that takes raw audio files, extracts features, and trains models to predict 11 continuous musical attributes, ranging from energy and valence to tempo and key.
 
-Michael Furlano, University of Toronto, Industrial Engineering, graduation May 2026
+The goal wasn’t just to get a low error score, but to understand which attributes are learnable, which ones dominate error, and where different model choices break down
+
+## What this project does
+- Predicts 11 musical attributes from raw audio
+- Compares a strong, interpretable baseline (Random Forest) against a temporal neural model (GRU-based RNN)
+- Emphasizes leakage-safe evaluation, per-feature error analysis, and reproducibility
+
+Best result:
+- Random Forest baseline (cross-validated MSE): 83.68
+- GRU-based RNN (best test MSE): 3.97 after tuning
 
 ## Why this project
-Musical attributes such as danceability, energy, and valence are subjective and time-dependent. We convert raw audio into feature tensors and learn to predict 11 continuous attributes, enabling objective comparisons, better search, and production-friendly scoring for music analysis.
+Musical attributes like danceability, energy, and valence are subjective and time-dependent, yet they’re widely used in recommendation and search systems.
+
+This project asks:
+- What can we reliably learn from audio alone?
+- Which targets are stable versus inherently noisy?
+- How do modeling choices affect different attributes, not just aggregate metrics?
+
+Answering those questions matters more to me than just reporting a single headline score.
 
 ## Targets (11 features)
 danceability, energy, valence, tempo, liveness, speechiness, instrumentalness, acousticness, loudness, time_signature, key
 
 ## Data pipeline
-1. Source labels and metadata from a large Spotify-derived dataset
-2. Download full-length audio via programmatic retrieval, store file paths in the metadata CSV
-3. Preprocess audio with Librosa at 22050 Hz and extract:
+The pipeline was designed to be reproducible and leakage-safe from the start:
+1. Collected labels and metadata from a large Spotify-derived dataset
+2. Programmatically retrieved full-length audio and linked file paths to metadata
+3.Preprocessed audio using Librosa (22,050 Hz) and extracted:
    - MFCCs, chroma, spectral contrast, tonnetz, zero-crossing rate
-4. Stack and transpose features into 2D tensors shaped as `[time_steps, feature_dims]`
-5. Save tensors to `.npy`, export aligned metadata CSV
-6. Split by file into 70 percent train, 15 percent validation, 15 percent test, preventing leakage
-
-Resilience features: timeouts and error handling during feature extraction, path normalization, Unicode normalization to remove accents and symbols, checkpointed training to handle GPU interruptions.
+4. Stacked features into `[time_steps, feature_dims]` tensors
+5. Save tensors as `.npy` files alongside aligned metadata
+6. Split data by file into 70% train, 15% validation, 15% test to prevent leakage
+   
+To make the pipeline robust, I added timeouts, error handling during feature extraction, Unicode/path normalization, and checkpointed training to handle GPU interruptions.
 
 ## Models
 - **Baseline, Random Forest Regressor**
@@ -65,21 +79,10 @@ Resilience features: timeouts and error handling during feature extraction, path
 - Feature scale differences not fully normalized in early iterations
 - Data collection via third-party sources may reflect genre and popularity biases
 
-## Roadmap
-- Per-feature loss weighting or heteroscedastic regression to down-weight high-variance targets
-- Multi-head architecture with specialized heads for tempo and key
-- Spectrogram + CNN front-ends, or CNN-RNN hybrids for improved local-temporal capture
-- Better scale normalization, label standardization, and calibration
-- Active learning loops to target poorly performing feature regions
-
 ## Ethical notes
 - Respect copyright and platform terms when collecting audio
 - Document data provenance and genre distribution biases
 - Provide privacy-safe sample datasets for reproducibility
-
-## Credits
-- Course: APS360, University of Toronto, Group 11
-- Authors: Michael Furlano, Cassandra Mack, Adam Barhoush, Jad Al-Jawhari
 
 ## Contact
 - Michael Furlano, [linkedin.com/in/michaelfurlano](https://linkedin.com/in/michaelfurlano), [github.com/mfurlan03](https://github.com/mfurlan03), furlanomichael02@gmail.com
