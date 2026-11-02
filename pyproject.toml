@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audio-regression"
+version = "0.2.0"
+description = "Predict 11 Spotify audio attributes from raw audio (Random Forest + GRU)."
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "pandas>=2.0", "scikit-learn>=1.3", "librosa>=0.10", "soundfile>=0.12"]
+
+[project.optional-dependencies]
+gru = ["torch>=2.1"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+audio-regression = "audio_regression.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
