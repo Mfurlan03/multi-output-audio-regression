@@ -1,88 +1,133 @@
 # Multi-Output Audio Feature Regression
 
-This project explores how well musical attributes can be predicted directly from full-length audio. I built an end-to-end pipeline that takes raw audio files, extracts features, and trains models to predict 11 continuous musical attributes, ranging from energy and valence to tempo and key.
+[![CI](https://github.com/Mfurlan03/multi-output-audio-regression/actions/workflows/ci.yml/badge.svg)](https://github.com/Mfurlan03/multi-output-audio-regression/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
-The goal wasn’t just to get a low error score, but to understand which attributes are learnable, which ones dominate error, and where different model choices break down
+How well can musical attributes be predicted directly from full-length audio? This project
+builds an end-to-end pipeline that turns raw audio into frame-level features and trains
+models to predict **11 Spotify attributes** at once: danceability, energy, valence, tempo,
+liveness, speechiness, instrumentalness, acousticness, loudness, time signature and key.
 
-## What this project does
-- Predicts 11 musical attributes from raw audio
-- Compares a strong, interpretable baseline (Random Forest) against a temporal neural model (GRU-based RNN)
-- Emphasizes leakage-safe evaluation, per-feature error analysis, and reproducibility
+The goal isn't one low error number. It's understanding **which attributes are learnable
+from audio, which dominate the error, and how evaluation choices can make a model look much
+better or worse than it is.**
 
-Best result:
-- Random Forest baseline (cross-validated MSE): 83.68
-- GRU-based RNN (best test MSE): 3.97 after tuning
+---
 
-## Why this project
-Musical attributes like danceability, energy, and valence are subjective and time-dependent, yet they’re widely used in recommendation and search systems.
+## Pipeline
 
-This project asks:
-- What can we reliably learn from audio alone?
-- Which targets are stable versus inherently noisy?
-- How do modeling choices affect different attributes, not just aggregate metrics?
+```
+audio (mp3) ──librosa @ 22.05 kHz──▶ frames × 39 features ──┬─▶ mean/std pooling (78-d) ──▶ Random Forest (one per target)
+                                                            └─▶ standardized sequence ─────▶ GRU ──▶ 11 outputs
+  13 MFCC · 12 chroma · 7 spectral contrast · 6 tonnetz · 1 ZCR
+```
 
-Answering those questions matters more to me than just reporting a single headline score.
+| Module | What it does |
+|---|---|
+| `features.py` | Frame-level feature extraction (39-d), song-level pooling |
+| `data.py` | Loads `.npy` tensors + metadata per split, Unicode-safe filename matching, synthetic sanity dataset |
+| `targets.py` | Target list, train-only `TargetScaler` |
+| `metrics.py` | Per-target MSE / MAE / **R²** plus a predict-the-mean baseline |
+| `models.py` | Per-target Random Forest; GRU with packed variable-length sequences, input and target standardization, early stopping |
+| `cli.py` | `extract`, `evaluate`, `demo` |
 
-## Targets (11 features)
-danceability, energy, valence, tempo, liveness, speechiness, instrumentalness, acousticness, loudness, time_signature, key
+```bash
+pip install -e ".[gru,dev]"
+python -m audio_regression extract  --audio-dir songs/ --out data/train/
+python -m audio_regression evaluate --data-dir data/ --model rf --out results/
+python -m audio_regression evaluate --data-dir data/ --model gru --out results/
+python -m audio_regression demo     # synthetic end-to-end run, no dataset needed
+```
 
-## Data pipeline
-The pipeline was designed to be reproducible and leakage-safe from the start:
-1. Collected labels and metadata from a large Spotify-derived dataset
-2. Programmatically retrieved full-length audio and linked file paths to metadata
-3.Preprocessed audio using Librosa (22,050 Hz) and extracted:
-   - MFCCs, chroma, spectral contrast, tonnetz, zero-crossing rate
-4. Stacked features into `[time_steps, feature_dims]` tensors
-5. Save tensors as `.npy` files alongside aligned metadata
-6. Split data by file into 70% train, 15% validation, 15% test to prevent leakage
-   
-To make the pipeline robust, I added timeouts, error handling during feature extraction, Unicode/path normalization, and checkpointed training to handle GPU interruptions.
+---
 
-## Models
-- **Baseline, Random Forest Regressor**
-  - Aggregates per-song features by mean and standard deviation to create fixed-length vectors
-  - `RandomizedSearchCV` across `n_estimators`, `max_depth`, `max_features`, `bootstrap`
-  - Best CV MSE: 83.6792
-  - Strengths: speechiness, valence, liveness; Weakness: tempo, loudness, key
+## Original results (course project, APS360) and what they actually show
 
-- **Primary, GRU-based RNN in PyTorch**
-  - Five stacked GRU layers, hidden size 256, dropout 0.3–0.5, layer norm, linear head to 11 outputs
-  - Loss: aggregated Mean Squared Error across outputs
-  - Experiments
-    - Exp 1: hidden 256, lr 0.001, dropout 0.3, Test MSE ≈ 90.15
-    - Exp 2: hidden 512, lr 0.0005, dropout 0.3, Test MSE ≈ 24.67
-    - Exp 3: hidden 256, lr 0.001, dropout 0.5, Test MSE ≈ 3.97
-    - **Best overall Test MSE: 3.97** 
-  - Note: despite temporal modeling, the RNN initially underperformed the RF baseline on aggregate due to high-variance features, especially tempo. Further tuning achieved a significantly lower MSE.
+The original experiments live in [`notebooks/`](notebooks), unchanged. Their saved outputs show:
 
-## Key insights
-- Aggregate MSE can hide per-feature strengths; per-feature MSE heatmaps reveal that tempo dominates error
-- Strong regularization, dropout 0.5, reduced overfitting and improved RNN test MSE by about 4 percent (in early experiments)
-- Leakage-safe splits, fixed seeds, and documented preprocessing are critical to fair comparison
-- For production, combine a temporal model with feature-specific heads or loss weighting to address high-variance features
+| Model | Reported metric | Value (from notebook outputs) |
+|---|---|---|
+| Random Forest (mean/std pooled features) | 5-fold CV MSE (train+val) | 83.68 |
+| Random Forest | test MSE averaged over 11 targets | ≈ 79.1 |
+| GRU, iteration 1 | test MSE | 90.17 |
+| GRU, iteration 2, exp 1 (hidden 256, lr 1e-3, dropout 0.3) | test MSE | 90.15 |
+| GRU, iteration 2, exp 2 (hidden 512, lr 5e-4, dropout 0.3) | test MSE | 90.17 |
 
-## Results
-- Random Forest cross-validated MSE: 83.68
-- GRU RNN best Test MSE: **3.97**
-- Per-feature MSE highlights
-  - Low error: valence, liveness, energy
-  - High error: tempo, loudness, key
-- Training dynamics: rapid convergence in 10–12 epochs, checkpointing stabilized progress on Colab A100
+**Raw MSE averaged over targets is the wrong headline metric here.** The RF's per-target test
+MSEs (saved in `APS360BaseModel_V2.ipynb`) were:
 
-## Reproducibility
-- Leakage-safe split by file, 70 percent train, 15 percent validation, 15 percent test
-- Versioned configs for each experiment
-- Checkpointing by best validation loss
+| tempo | loudness | key | time_sig | instrumentalness | valence | acousticness | liveness | energy | danceability | speechiness |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 843.9 | 13.86 | 11.36 | 0.242 | 0.084 | 0.049 | 0.047 | 0.027 | 0.026 | 0.022 | 0.007 |
+
+**Tempo is 97% of the averaged MSE.** Three consequences:
+
+1. The aggregate number says almost nothing about the other 10 attributes.
+2. Three GRU configurations landing at 90.15–90.17 is the signature of a model
+   predicting close to the training mean. The targets were never standardized, so the MSE
+   loss was effectively a tempo loss.
+3. The original RF was a single joint multi-output forest on raw targets. Every split was
+   chosen mostly by tempo's variance reduction, and the other attributes inherited those splits.
+
+> An earlier version of this README quoted GRU test MSEs of 24.67 and 3.97. Those values
+> don't appear in any saved notebook output, and the second-iteration notebook records
+> 90.17 for the configuration labelled 24.67. They've been removed until they can be
+> reproduced.
+
+## What v0.2 changes
+
+| Problem | Fix |
+|---|---|
+| Targets on scales from 0.01 to 800 | `TargetScaler` fit on the training split; models train on standardized targets |
+| Raw MSE hides per-target quality | Report per-target **R²** and MSE against a **predict-the-mean baseline**; mean R² as the headline |
+| Joint forest lets one target pick every split | One forest per target (`MultiOutputRegressor`) |
+| GRU fed raw MFCCs (hundreds) next to chroma (0–1) | Per-dimension input standardization fit on training frames |
+| Padded batches | Packed variable-length sequences, gradient clipping, early stopping on validation loss |
+| Unicode filenames renamed on disk (and failing) | Match normalized names in memory; never mutate the dataset |
+
+### Sanity check: synthetic audio with known answers
+
+`python -m audio_regression demo` synthesizes click tracks where **tempo** (click rate) and
+**loudness** (amplitude) are encoded in the audio and the other nine targets are random noise.
+A correct pipeline should learn the first two and score R² ≈ 0 or below on the rest. This check
+is in the test suite, and it's how the joint-forest problem was found:
+
+| Random Forest variant (default settings) | loudness R² | tempo R² |
+|---|---:|---:|
+| Joint multi-output forest (original approach) | 0.50 | 0.72 |
+| One forest per target (v0.2) | **0.87** | **0.85** |
+
+*80 synthetic clips (68 train+val, 12 test), seed 0, 300 trees, standardized targets. With only
+12 test clips these are rough estimates; the direction is consistent across seeds and is
+enforced by `test_joint_forest_is_hijacked_by_noise_targets`.*
+
+**Next step:** re-run `evaluate` on the original Spotify/FMA dataset to get per-target R² for both
+models. The audio itself isn't redistributable, so it isn't in this repo.
+
+---
+
+## Development
+
+```bash
+pip install -e ".[dev]"     # add [gru] for the PyTorch model
+ruff check . && pytest -q
+```
+
+CI runs lint and the test suite, including the synthetic end-to-end checks and a short GRU
+training run on CPU.
 
 ## Limitations
-- Tempo variance dominates global MSE and can obscure improvements on other targets
-- Feature scale differences not fully normalized in early iterations
-- Data collection via third-party sources may reflect genre and popularity biases
 
-## Ethical notes
-- Respect copyright and platform terms when collecting audio
-- Document data provenance and genre distribution biases
-- Provide privacy-safe sample datasets for reproducibility
+- Spotify's attributes are themselves model outputs, so they put a ceiling on what audio can recover.
+- Third-party audio sources reflect genre and popularity biases.
+- `key` and `time_signature` are categorical. Treating them as regression targets is a
+  simplification; classification heads would be the principled fix.
+
+## Ethics
+
+Respect copyright and platform terms when collecting audio, and document data provenance.
+This repo ships no audio.
 
 ## Contact
-- Michael Furlano, [linkedin.com/in/michaelfurlano](https://linkedin.com/in/michaelfurlano), [github.com/mfurlan03](https://github.com/mfurlan03), furlanomichael02@gmail.com
+
+Michael Furlano · [linkedin.com/in/michaelfurlano](https://linkedin.com/in/michaelfurlano) · [github.com/mfurlan03](https://github.com/mfurlan03)
